@@ -1,0 +1,4 @@
+.phony:	build
+
+build:
+	docker build -t news_crawler:latest .
