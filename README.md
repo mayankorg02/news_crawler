@@ -1,8 +1,7 @@
 # News Crawler
 
-A Go project scaffold for building a news crawler. The application is not
-implemented yet: this repository currently contains the module declaration and
-project configuration, but no crawler, executable, or runtime configuration.
+A concurrent Go crawler that fetches configured seed pages, discovers links on
+the same host, and follows them up to each seed's configured depth.
 
 ## Requirements
 
@@ -17,8 +16,20 @@ git clone <repository-url>
 cd news_crawler
 ```
 
-The application is not runnable until Go source code and an entry point are
-added. Once packages are present, run the test suite with:
+Run the crawler:
+
+```sh
+go run ./cmd
+```
+
+Each configured seed has a maximum link depth. Depth `0` fetches only the seed;
+depth `1` also fetches pages linked directly from it. The crawler stays on the
+seed's hostname, removes URL fragments, and uses up to eight concurrent
+workers. It prints each page's depth, HTTP status, discovered-link count, and
+URL. Fetch failures are printed and returned as a non-zero process exit.
+
+Seed URLs and their depths are configured in `internal/config.go`. Run tests
+with:
 
 ```sh
 go test ./...
@@ -30,15 +41,19 @@ go test ./...
 | --- | --- |
 | [`go.mod`](go.mod) | Go module name and language version |
 | [`AGENTS.md`](AGENTS.md) | Guidance for contributors and coding agents |
-| [`Dockerfile`](Dockerfile) | Initial container build configuration |
+| [`Dockerfile`](Dockerfile) | Multi-stage container build configuration |
 | [`MAKEFILE`](MAKEFILE) | Make target for building the container image |
 | [`.github/workflows/`](.github/workflows/) | GitHub Actions workflows |
 
-The container build and application run workflow may need updating as the
-application structure and entry point are added.
+Build and run the container with:
+
+```sh
+docker build -t news_crawler:latest .
+docker run --rm news_crawler:latest
+```
 
 ## Development
 
 - Format Go source files with `gofmt`.
-- Add tests alongside new functionality and run `go test ./...`.
+- Run `go test ./...` after Go code changes.
 - Update this README when setup, supported commands, or crawler behavior changes.

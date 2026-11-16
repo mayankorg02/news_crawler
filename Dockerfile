@@ -1,6 +1,11 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 WORKDIR /app
-copy go.mod go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o main .
+RUN CGO_ENABLED=0 go build -o /news-crawler ./cmd
+
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /news-crawler /usr/local/bin/news-crawler
+ENTRYPOINT ["/usr/local/bin/news-crawler"]
