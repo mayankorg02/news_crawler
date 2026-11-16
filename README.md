@@ -52,6 +52,19 @@ docker build -t news_crawler:latest .
 docker run --rm news_crawler:latest
 ```
 
+## Publishing to Docker Hub
+
+Create a **private** Docker Hub repository named `news_crawler`, then add these
+repository secrets under **Settings → Secrets and variables → Actions**:
+
+- `DOCKERHUB_USERNAME`: the Docker Hub account that owns the repository.
+- `DOCKERHUB_TOKEN`: a Docker Hub access token with permission to push images.
+
+The `Publish Docker image` workflow publishes on pushes to `main` and tags
+starting with `v`. Main-branch pushes update the `main`, `latest`, and
+commit-SHA tags; version-tag pushes publish the version and commit-SHA tags.
+Pull requests continue to build the image without publishing it.
+
 ## Development
 
 - Format Go source files with `gofmt`.
