@@ -5,14 +5,9 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net/http"
-	"time"
 )
 
-const (
-	defaultWorkers = 8
-	requestTimeout = 15 * time.Second
-)
+const defaultWorkers = 2
 
 // Runner configures the whole scraping process.
 type Runner struct {
@@ -33,6 +28,11 @@ func (rn *Runner) Run(ctx context.Context, output io.Writer) error {
 		return errors.New("output writer cannot be nil")
 	}
 
-	client := &http.Client{Timeout: requestTimeout}
-	return runCrawler(ctx, rn.Urls, client, defaultWorkers, output)
+	fetcher, err := newBrowserFetcher(ctx, getBrowserConfig())
+	if err != nil {
+		return err
+	}
+	defer fetcher.Close()
+
+	return runCrawler(ctx, rn.Urls, fetcher.Fetch, defaultWorkers, output)
 }
