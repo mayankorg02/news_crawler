@@ -1,39 +1,43 @@
 # News Crawler
 
-A concurrent Go crawler that fetches configured seed pages, discovers links on
-the same host, and follows them up to each seed's configured depth.
+A Go crawler that renders configured seed pages in headless Chromium, saves
+their HTML, discovers links on the same host, and follows them up to each
+seed's configured depth.
 
 ## Requirements
 
-- Go 1.27.3, as declared in [`go.mod`](go.mod)
+- Docker
+
+The crawler and its Chromium browser run inside Docker. Building the image
+downloads Go dependencies only into the build container. Chromium runs in the
+image, and downloaded pages are kept in a Docker-managed volume.
 
 ## Getting started
 
-Clone the repository and enter its directory:
-
 ```sh
-git clone <repository-url>
-cd news_crawler
+docker build -t news_crawler:latest .
+docker volume create news-crawler-data
+docker run --rm -v news-crawler-data:/data news_crawler:latest
 ```
 
-Run the crawler:
-
-```sh
-go run ./cmd
-```
+The named Docker volume keeps downloaded page HTML in Docker-managed storage.
+The image build runs the Go test suite before compiling the crawler.
 
 Each configured seed has a maximum link depth. Depth `0` fetches only the seed;
 depth `1` also fetches pages linked directly from it. The crawler stays on the
-seed's hostname, removes URL fragments, and uses up to eight concurrent
-workers. It prints each page's depth, HTTP status, discovered-link count, and
-URL. Fetch failures are printed and returned as a non-zero process exit.
+seed's hostname, removes URL fragments, renders pages in Chromium, and spaces
+requests to each host by at least one second. It saves rendered HTML files in
+`/data`, named by a hash of each page URL, and prints each file path with the
+page's depth, HTTP status, discovered-link count, and URL. Fetch failures are
+printed and returned as a non-zero process exit. The crawler identifies itself
+as `news-crawler/1.0`; it does not attempt to bypass access controls or
+anti-automation challenges.
 
-Seed URLs and their depths are configured in `internal/config.go`. Run tests
-with:
-
-```sh
-go test ./...
-```
+Seed URLs and their depths are configured in `internal/config.go`. Browser
+settings are in the same file. The Docker image includes Chromium and sets
+`NEWS_CRAWLER_OUTPUT_DIR=/data`; no browser or Go dependencies need to be
+installed on the host. For a different browser path or output directory, pass
+`NEWS_CRAWLER_CHROME_PATH` or `NEWS_CRAWLER_OUTPUT_DIR` to `docker run`.
 
 ## Repository layout
 
@@ -49,7 +53,8 @@ Build and run the container with:
 
 ```sh
 docker build -t news_crawler:latest .
-docker run --rm news_crawler:latest
+docker volume create news-crawler-data
+docker run --rm -v news-crawler-data:/data news_crawler:latest
 ```
 
 ## Publishing to Docker Hub
@@ -68,5 +73,5 @@ Pull requests continue to build the image without publishing it.
 ## Development
 
 - Format Go source files with `gofmt`.
-- Run `go test ./...` after Go code changes.
+- The Docker build runs `go test ./...` after Go code changes.
 - Update this README when setup, supported commands, or crawler behavior changes.

@@ -5,9 +5,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 func TestRunCrawlerFollowsSameHostLinksUpToDepth(t *testing.T) {
@@ -31,8 +34,36 @@ func TestRunCrawlerFollowsSameHostLinksUpToDepth(t *testing.T) {
 	}))
 	defer server.Close()
 
+	fetch := func(ctx context.Context, job crawlJob) crawlResult {
+		result := crawlResult{job: job}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, job.url, nil)
+		if err != nil {
+			result.err = err
+			return result
+		}
+		response, err := server.Client().Do(request)
+		if err != nil {
+			result.err = err
+			return result
+		}
+		defer response.Body.Close()
+		result.status = response.StatusCode
+		document, err := html.Parse(response.Body)
+		if err != nil {
+			result.err = err
+			return result
+		}
+		base, err := url.Parse(job.url)
+		if err != nil {
+			result.err = err
+			return result
+		}
+		result.links = extractLinks(document, base, job.host)
+		return result
+	}
+
 	var output bytes.Buffer
-	err := runCrawler(context.Background(), []urlConfig{{url: server.URL, depth: 1}}, server.Client(), 2, &output)
+	err := runCrawler(context.Background(), []urlConfig{{url: server.URL, depth: 1}}, fetch, 2, &output)
 	if err != nil {
 		t.Fatalf("runCrawler() error = %v", err)
 	}
@@ -53,7 +84,10 @@ func TestRunCrawlerFollowsSameHostLinksUpToDepth(t *testing.T) {
 
 func TestRunCrawlerRejectsInvalidSeed(t *testing.T) {
 	var output bytes.Buffer
-	err := runCrawler(context.Background(), []urlConfig{{url: "file:///tmp/news.html"}}, http.DefaultClient, 1, &output)
+	err := runCrawler(context.Background(), []urlConfig{{url: "file:///tmp/news.html"}}, func(context.Context, crawlJob) crawlResult {
+		t.Fatal("fetch should not be called for an invalid seed")
+		return crawlResult{}
+	}, 1, &output)
 	if err == nil {
 		t.Fatal("runCrawler() error = nil, want invalid seed error")
 	}
