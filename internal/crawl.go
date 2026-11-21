@@ -13,6 +13,8 @@ import (
 	"golang.org/x/net/html"
 )
 
+type pageFetcher func(context.Context, crawlJob) crawlResult
+
 type crawlJob struct {
 	url      string
 	host     string
@@ -25,12 +27,13 @@ type crawlResult struct {
 	job    crawlJob
 	status int
 	links  []string
+	file   string
 	err    error
 }
 
-func runCrawler(ctx context.Context, seeds []urlConfig, client *http.Client, workers int, output io.Writer) error {
+func runCrawler(ctx context.Context, seeds []urlConfig, fetch pageFetcher, workers int, output io.Writer) error {
 	pipeline, err := NewPipeline(workers, func(ctx context.Context, job crawlJob) crawlResult {
-		return fetchPage(ctx, client, job)
+		return fetch(ctx, job)
 	})
 	if err != nil {
 		return err
@@ -87,7 +90,7 @@ func runCrawler(ctx context.Context, seeds []urlConfig, client *http.Client, wor
 				continue
 			}
 
-			if _, err := fmt.Fprintf(output, "depth=%d status=%d links=%d url=%s\n", result.job.depth, result.status, len(result.links), result.job.url); err != nil {
+			if _, err := fmt.Fprintf(output, "depth=%d status=%d links=%d file=%s url=%s\n", result.job.depth, result.status, len(result.links), result.file, result.job.url); err != nil {
 				return errors.Join(errors.Join(runErrors...), err)
 			}
 
@@ -123,35 +126,6 @@ func parseSeed(raw string) (*url.URL, error) {
 		return nil, errors.New("seed must be an absolute HTTP or HTTPS URL")
 	}
 	return parsed, nil
-}
-
-func fetchPage(ctx context.Context, client *http.Client, job crawlJob) crawlResult {
-	result := crawlResult{job: job}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, job.url, nil)
-	if err != nil {
-		result.err = err
-		return result
-	}
-	req.Header.Set("User-Agent", "news-crawler/1.0")
-
-	response, err := client.Do(req)
-	if err != nil {
-		result.err = err
-		return result
-	}
-	defer response.Body.Close()
-	result.status = response.StatusCode
-	if result.status < http.StatusOK || result.status >= http.StatusMultipleChoices {
-		return result
-	}
-
-	document, err := html.Parse(io.LimitReader(response.Body, 10<<20))
-	if err != nil {
-		result.err = err
-		return result
-	}
-	result.links = extractLinks(document, response.Request.URL, job.host)
-	return result
 }
 
 func extractLinks(document *html.Node, base *url.URL, host string) []string {

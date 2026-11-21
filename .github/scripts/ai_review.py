@@ -200,6 +200,7 @@ def infer(args):
     request_body = {
         "model": args.model,
         "stream": False,
+        "think": False,
         "format": schema,
         "options": {"temperature": 0},
         "messages": [
@@ -216,9 +217,20 @@ def infer(args):
     )
     with urllib.request.urlopen(request, timeout=1800) as response:
         result = json.loads(response.read().decode("utf-8"))
-    content = result.get("message", {}).get("content")
+    message = result.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
     if not isinstance(content, str) or not content.strip():
-        raise ValueError("Ollama returned an empty structured review")
+        message_fields = sorted(message) if isinstance(message, dict) else []
+        thinking = message.get("thinking") if isinstance(message, dict) else None
+        tool_calls = message.get("tool_calls") if isinstance(message, dict) else None
+        metadata = (
+            f"done_reason={result.get('done_reason')!r}, "
+            f"eval_count={result.get('eval_count')!r}, "
+            f"message_fields={message_fields!r}, "
+            f"thinking_chars={len(thinking) if isinstance(thinking, str) else 0}, "
+            f"tool_calls={len(tool_calls) if isinstance(tool_calls, list) else 0}"
+        )
+        raise ValueError(f"Ollama returned an empty structured review ({metadata})")
     Path(args.output).write_text(content, encoding="utf-8")
 
 
